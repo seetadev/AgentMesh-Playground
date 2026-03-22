@@ -1,0 +1,12 @@
+[project]
+name = "aoin"
+version = "0.1.0"
+description = "Decentralized Agent-to-Agent Marketplace for Predictive Financial Signals"
+requires-python = ">=3.12"
+dependencies = [
+    "libp2p>=0.6.0",
+    "trio>=0.26.0",
+    "multiaddr>=0.0.11",
+    "pympp[tempo]>=0.4.2",
+    "httpx>=0.27",
+]
