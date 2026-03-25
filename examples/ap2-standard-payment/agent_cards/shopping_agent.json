@@ -1,0 +1,25 @@
+{
+  "name": "ShoppingAgent",
+  "description": "Orchestrates the purchase flow - discovers merchants, collects intent, compares carts, handles payment",
+  "url": "http://localhost:8000",
+  "version": "0.1.0",
+  "capabilities": {
+    "extensions": [
+      {
+        "uri": "https://github.com/google-agentic-commerce/ap2/tree/v0.1",
+        "description": "AP2 Shopping Agent role",
+        "required": true,
+        "params": {
+          "roles": ["shopper"]
+        }
+      }
+    ]
+  },
+  "skills": [
+    {
+      "id": "shop",
+      "name": "Shop",
+      "description": "Discover merchants, compare offers, and complete purchases on behalf of the user"
+    }
+  ]
+}

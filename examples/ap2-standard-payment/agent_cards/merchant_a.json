@@ -1,0 +1,30 @@
+{
+  "name": "QuickShoot Studios",
+  "description": "Professional event videography services - competitive pricing",
+  "url": "http://localhost:8001",
+  "version": "0.1.0",
+  "capabilities": {
+    "extensions": [
+      {
+        "uri": "https://github.com/google-agentic-commerce/ap2/tree/v0.1",
+        "description": "AP2 Merchant role",
+        "required": true,
+        "params": {
+          "roles": ["merchant"]
+        }
+      }
+    ]
+  },
+  "skills": [
+    {
+      "id": "search_catalog",
+      "name": "Search Catalog",
+      "description": "Search for videography service packages"
+    },
+    {
+      "id": "create_cart",
+      "name": "Create Cart",
+      "description": "Build and sign a CartMandate for videography services"
+    }
+  ]
+}

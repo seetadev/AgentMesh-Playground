@@ -1,0 +1,30 @@
+{
+  "name": "PaymentProcessor",
+  "description": "Simulated payment processor - validates mandates, authorizes payments, manages escrow",
+  "url": "http://localhost:8004",
+  "version": "0.1.0",
+  "capabilities": {
+    "extensions": [
+      {
+        "uri": "https://github.com/google-agentic-commerce/ap2/tree/v0.1",
+        "description": "AP2 Payment Processor role",
+        "required": true,
+        "params": {
+          "roles": ["payment-processor"]
+        }
+      }
+    ]
+  },
+  "skills": [
+    {
+      "id": "process_payment",
+      "name": "Process Payment",
+      "description": "Validate mandates and process payment authorization"
+    },
+    {
+      "id": "manage_escrow",
+      "name": "Manage Escrow",
+      "description": "Hold, release, or refund escrow funds"
+    }
+  ]
+}
