@@ -1,0 +1,58 @@
+# AgentMesh Full-Stack — Configuration Template
+# Copy this file to config.toml and adjust values as needed.
+# config.toml is gitignored so local overrides won't be committed.
+#
+# All values shown here are the defaults used when config.toml is absent.
+
+[network]
+listen_ip = "127.0.0.1"
+
+[ports]
+bootstrap   = 9000
+coordinator = 9004
+
+[timeouts]
+# Seconds to wait for bootstrap to start before connecting workers
+bootstrap_ready_delay   = 2.0
+# Extra seconds to wait for GossipSub mesh formation before starting coordinator
+coordinator_ready_delay = 6.0
+# How long coordinator listens for GossipSub announcements (discovery window)
+discovery_window        = 8.0
+# Per-negotiation round-trip timeout (seconds)
+negotiate_timeout       = 10.0
+# Per-execution step timeout (seconds)
+execute_timeout         = 30.0
+# How often workers re-announce their capabilities (seconds)
+reannounce_interval     = 5.0
+# How often bootstrap broadcasts mesh summary (seconds)
+mesh_broadcast_interval = 15.0
+# How often workers re-provide their DHT key (seconds; 43200 = 12h)
+dht_reprovide_interval  = 43200.0
+
+[coordinator]
+default_budget           = 0.10
+# Retry attempts for execution step timeouts (not deliberate worker errors)
+execute_retry_attempts   = 2
+# Retry attempts for negotiate stream creation failures
+negotiate_retry_attempts = 3
+
+[[workers]]
+name       = "DataValidator"
+port       = 9001
+capability = "data_validation"
+cost       = 0.01
+quality    = "standard"
+
+[[workers]]
+name       = "AnalyticsEngine"
+port       = 9002
+capability = "analytics"
+cost       = 0.02
+quality    = "standard"
+
+[[workers]]
+name       = "ReportWriter"
+port       = 9003
+capability = "report_generation"
+cost       = 0.015
+quality    = "premium"
