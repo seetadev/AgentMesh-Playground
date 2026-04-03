@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>p2p-coordinated-pipeline — AgentMesh Stack</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #21262d;
+    --border: #30363d; --text: #e6edf3; --muted: #7d8590;
+    --blue: #388bfd; --green: #3fb950; --orange: #d29922;
+    --purple: #bc8cff; --red: #f85149; --teal: #39d353;
+    --layer1: #1f6feb; --layer2: #388bfd; --layer3: #bc8cff;
+    --layer4: #d29922; --layer5: #3fb950; --layer6: #39d353;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .badge { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 2px 10px; font-size: 12px; color: var(--muted); }
+
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 24px; }
+  .tab { padding: 10px 18px; cursor: pointer; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; transition: all .2s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+  .layout { display: flex; height: calc(100vh - 90px); }
+  .main { flex: 1; overflow: auto; padding: 24px; }
+  .sidebar { width: 320px; background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; padding: 16px; flex-shrink: 0; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── Topology ── */
+  #topology-svg { width: 100%; border-radius: 8px; }
+
+  .node-group { cursor: pointer; }
+  .node-group:hover .node-ring { opacity: 1; }
+  .node-ring { opacity: 0; transition: opacity .2s; }
+  .node-label { font-size: 12px; fill: var(--text); text-anchor: middle; pointer-events: none; }
+  .node-sublabel { font-size: 10px; fill: var(--muted); text-anchor: middle; pointer-events: none; }
+
+  .edge { stroke-width: 1.5; fill: none; opacity: 0.6; }
+  .edge-dht { stroke: var(--blue); stroke-dasharray: 4,3; }
+  .edge-gossip { stroke: var(--purple); stroke-dasharray: 6,2; }
+  .edge-direct { stroke: var(--green); }
+  .edge-negotiate { stroke: var(--orange); }
+  .edge-execute { stroke: var(--layer5); }
+  .edge-health { stroke: var(--teal); stroke-dasharray: 2,2; }
+
+  .msg-packet { pointer-events: none; }
+  .msg-circle { fill: var(--orange); r: 6; }
+
+  /* ── Pipeline ── */
+  .pipeline-container { display: flex; flex-direction: column; gap: 20px; }
+
+  .layers-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .layer-card {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; cursor: pointer; transition: all .2s; position: relative;
+    overflow: hidden;
+  }
+  .layer-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .layer-card:hover { border-color: var(--blue); transform: translateY(-2px); }
+  .layer-card.selected { border-color: var(--blue); }
+  .layer-card .num { font-size: 10px; color: var(--muted); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+  .layer-card h3 { font-size: 13px; font-weight: 600; margin: 4px 0 6px; }
+  .layer-card p { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .l1::before { background: var(--layer1); } .l1.selected { border-color: var(--layer1); }
+  .l2::before { background: var(--layer2); } .l2.selected { border-color: var(--layer2); }
+  .l3::before { background: var(--layer3); } .l3.selected { border-color: var(--layer3); }
+  .l4::before { background: var(--layer4); } .l4.selected { border-color: var(--layer4); }
+  .l5::before { background: var(--layer5); } .l5.selected { border-color: var(--layer5); }
+  .l6::before { background: var(--layer6); } .l6.selected { border-color: var(--layer6); }
+
+  .flow-section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .flow-section h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
+
+  .flow-row { display: flex; align-items: center; gap: 0; margin-bottom: 8px; }
+  .flow-node {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 12px; font-size: 12px; flex-shrink: 0; cursor: pointer;
+    transition: all .2s; min-width: 110px; text-align: center;
+  }
+  .flow-node:hover { border-color: var(--blue); }
+  .flow-node .fn-name { font-weight: 600; font-size: 12px; }
+  .flow-node .fn-cap { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .flow-arrow { color: var(--muted); padding: 0 8px; font-size: 16px; flex-shrink: 0; }
+  .flow-msg {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 20px;
+    padding: 3px 10px; font-size: 11px; color: var(--muted); flex-shrink: 0;
+    font-family: monospace;
+  }
+  .flow-msg.negotiate { border-color: var(--orange); color: var(--orange); }
+  .flow-msg.execute { border-color: var(--layer5); color: var(--layer5); }
+  .flow-msg.data { border-color: var(--blue); color: var(--blue); }
+  .flow-msg.attest { border-color: var(--layer6); color: var(--layer6); }
+
+  .wave-section { margin-top: 20px; }
+  .wave-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 600; }
+  .wave-row { display: flex; align-items: stretch; gap: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+  .wave-num { background: var(--surface2); border-right: 1px solid var(--border); padding: 12px 14px; font-size: 12px; font-weight: 700; color: var(--muted); display: flex; align-items: center; min-width: 70px; }
+  .wave-steps { display: flex; align-items: center; gap: 12px; padding: 10px 14px; flex: 1; flex-wrap: wrap; }
+  .wave-step {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 14px; font-size: 12px; cursor: pointer; transition: all .2s;
+  }
+  .wave-step:hover { border-color: var(--layer5); }
+  .wave-step .ws-worker { font-weight: 600; }
+  .wave-step .ws-cap { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .wave-step .ws-chain { font-size: 10px; color: var(--blue); margin-top: 2px; font-family: monospace; }
+  .wave-arrow { color: var(--muted); font-size: 20px; }
+
+  /* ── Sidebar ── */
+  .sidebar h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+  .detail-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .detail-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .detail-card .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .detail-card p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .detail-card .kv { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .detail-card .kv:last-child { border-bottom: none; }
+  .detail-card .kv span:first-child { color: var(--muted); }
+  .detail-card .kv span:last-child { font-family: monospace; font-size: 11px; }
+
+  .proto-badge { display: inline-block; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 11px; font-family: monospace; margin: 2px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .legend-line { width: 24px; height: 2px; }
+  .legend-line.dashed { background: repeating-linear-gradient(90deg, currentColor 0, currentColor 4px, transparent 4px, transparent 7px); }
+
+  /* ── Animations ── */
+  @keyframes flow-along {
+    0%   { offset-distance: 0%; opacity: 1; }
+    85%  { opacity: 1; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+  .animated-packet {
+    position: absolute; width: 10px; height: 10px; border-radius: 50%;
+    offset-rotate: auto; animation: flow-along 1.5s ease-in-out forwards;
+    pointer-events: none;
+  }
+
+  .controls { display: flex; gap: 8px; margin-bottom: 16px; }
+  .btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    transition: all .2s;
+  }
+  .btn:hover { border-color: var(--blue); color: var(--blue); }
+  .btn.primary { background: var(--blue); border-color: var(--blue); color: white; }
+  .btn.primary:hover { background: #1f6feb; }
+
+  .status-bar { font-size: 11px; color: var(--muted); padding: 6px 0; font-family: monospace; min-height: 20px; }
+  .status-bar .ok { color: var(--green); }
+  .status-bar .warn { color: var(--orange); }
+
+  /* SVG node colors */
+  .n-bootstrap { fill: #1f6feb33; stroke: var(--layer1); }
+  .n-coordinator { fill: #bc8cff33; stroke: var(--purple); }
+  .n-validator { fill: #3fb95033; stroke: var(--green); }
+  .n-analytics { fill: #d2992233; stroke: var(--orange); }
+  .n-reporter { fill: #39d35333; stroke: var(--teal); }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="10" stroke="#388bfd" stroke-width="1.5"/>
+    <circle cx="12" cy="12" r="4" fill="#388bfd" opacity=".6"/>
+    <line x1="12" y1="2" x2="12" y2="7" stroke="#388bfd" stroke-width="1.5"/>
+    <line x1="12" y1="17" x2="12" y2="22" stroke="#388bfd" stroke-width="1.5"/>
+    <line x1="2" y1="12" x2="7" y2="12" stroke="#388bfd" stroke-width="1.5"/>
+    <line x1="17" y1="12" x2="22" y2="12" stroke="#388bfd" stroke-width="1.5"/>
+  </svg>
+  <h1>p2p-coordinated-pipeline</h1>
+  <span class="badge">AgentMesh Full Stack</span>
+  <span class="badge">6 Layers</span>
+  <span class="badge">libp2p</span>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('topology')">Network Topology</div>
+  <div class="tab" onclick="switchTab('pipeline')">Pipeline Execution</div>
+</div>
+
+<div class="layout">
+  <div class="main">
+
+    <!-- ── TAB 1: TOPOLOGY ── -->
+    <div id="tab-topology" class="tab-content active">
+      <div class="controls">
+        <button class="btn primary" onclick="playAnimation()">▶ Play Message Flow</button>
+        <button class="btn" onclick="resetAnimation()">↺ Reset</button>
+        <button class="btn" onclick="toggleLabels()">Toggle Labels</button>
+      </div>
+      <div class="status-bar" id="status-bar">Click "Play" to animate the full protocol flow.</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-line" style="background:var(--blue);opacity:.7"></div> DHT / KadDHT</div>
+        <div class="legend-item"><div class="legend-line dashed" style="color:var(--purple)"></div> GossipSub</div>
+        <div class="legend-item"><div class="legend-line" style="background:var(--orange);opacity:.7"></div> Negotiate</div>
+        <div class="legend-item"><div class="legend-line" style="background:var(--green);opacity:.7"></div> Execute</div>
+        <div class="legend-item"><div class="legend-line dashed" style="color:var(--teal)"></div> Health Ping</div>
+      </div>
+
+      <svg id="topology-svg" viewBox="0 0 820 500" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#7d8590" opacity=".6"/>
+          </marker>
+          <marker id="arr-orange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="var(--orange)" opacity=".8"/>
+          </marker>
+          <marker id="arr-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="var(--green)" opacity=".8"/>
+          </marker>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        <!-- ── BACKGROUND SECTIONS ── -->
+        <rect x="10" y="10" width="800" height="480" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+        <text x="20" y="30" font-size="10" fill="#7d8590" font-family="monospace">P2P Network Topology</text>
+
+        <!-- ── DHT EDGES (bootstrap ↔ peers) ── -->
+        <!-- bootstrap(410,90) to coordinator(120,260) -->
+        <path id="e-boot-coord" d="M390,122 L160,242" class="edge edge-dht" marker-end="url(#arr)"/>
+        <!-- bootstrap to validator -->
+        <path id="e-boot-val" d="M440,122 L580,190" class="edge edge-dht" marker-end="url(#arr)"/>
+        <!-- bootstrap to analytics -->
+        <path id="e-boot-ana" d="M440,108 L640,242" class="edge edge-dht" marker-end="url(#arr)"/>
+        <!-- bootstrap to reporter -->
+        <path id="e-boot-rep" d="M438,122 L620,330" class="edge edge-dht" marker-end="url(#arr)"/>
+
+        <!-- ── GOSSIPSUB EDGES ── -->
+        <!-- workers → bootstrap (announce) -->
+        <path id="gs-val-boot" d="M572,188 C500,150 460,120 432,108" class="edge edge-gossip" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+        <path id="gs-ana-boot" d="M632,246 C580,190 510,140 438,110" class="edge edge-gossip" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+        <path id="gs-rep-boot" d="M614,332 C550,270 490,180 440,118" class="edge edge-gossip" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+        <!-- bootstrap → coordinator (relay) -->
+        <path id="gs-boot-coord" d="M390,116 C300,150 220,200 162,244" class="edge edge-gossip" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+
+        <!-- ── HEALTH PING EDGES (coordinator → workers, pre-negotiation) ── -->
+        <path id="h-coord-val" d="M180,248 C280,220 420,210 558,218" class="edge edge-health" opacity="0" marker-end="url(#arr)"/>
+        <path id="h-coord-ana" d="M182,268 C320,270 480,268 618,268" class="edge edge-health" opacity="0" marker-end="url(#arr)"/>
+        <path id="h-coord-rep" d="M174,280 C280,320 460,340 600,352" class="edge edge-health" opacity="0" marker-end="url(#arr)"/>
+
+        <!-- ── NEGOTIATE EDGES (coordinator → workers) ── -->
+        <path id="n-coord-val" d="M185,252 C330,230 460,222 562,222" class="edge edge-negotiate" opacity="0" marker-end="url(#arr-orange)"/>
+        <path id="n-coord-ana" d="M184,265 C350,265 490,265 622,265" class="edge edge-negotiate" opacity="0" marker-end="url(#arr-orange)"/>
+        <path id="n-coord-rep" d="M178,276 C300,310 470,338 606,355" class="edge edge-negotiate" opacity="0" marker-end="url(#arr-orange)"/>
+
+        <!-- ── EXECUTE EDGES (coordinator → workers, then results back) ── -->
+        <path id="x-coord-val" d="M185,254 C330,232 460,224 562,224" class="edge edge-execute" opacity="0" marker-end="url(#arr-green)"/>
+        <path id="x-val-coord" d="M560,236 C400,258 280,265 184,262" class="edge edge-execute" opacity="0" marker-end="url(#arr-green)"/>
+        <path id="x-coord-ana" d="M184,268 C350,268 490,268 622,268" class="edge edge-execute" opacity="0" marker-end="url(#arr-green)"/>
+        <path id="x-ana-coord" d="M620,278 C460,286 320,280 184,276" class="edge edge-execute" opacity="0" marker-end="url(#arr-green)"/>
+        <path id="x-coord-rep" d="M178,278 C300,312 470,340 606,357" class="edge edge-execute" opacity="0" marker-end="url(#arr-green)"/>
+        <path id="x-rep-coord" d="M604,368 C440,360 290,318 178,290" class="edge edge-execute" opacity="0" marker-end="url(#arr-green)"/>
+
+        <!-- ── NODES ── -->
+
+        <!-- Bootstrap -->
+        <g class="node-group" onclick="selectNode('bootstrap')" id="node-bootstrap">
+          <circle cx="410" cy="90" r="38" class="n-bootstrap" filter="url(#glow)"/>
+          <circle cx="410" cy="90" r="38" class="node-ring" fill="none" stroke="#1f6feb" stroke-width="2"/>
+          <text x="410" y="84" class="node-label" font-weight="700" font-size="12">Bootstrap</text>
+          <text x="410" y="99" class="node-sublabel">DHT Server</text>
+          <text x="410" y="111" class="node-sublabel">GossipSub</text>
+        </g>
+
+        <!-- Coordinator -->
+        <g class="node-group" onclick="selectNode('coordinator')" id="node-coordinator">
+          <rect x="75" y="228" width="110" height="64" rx="8" class="n-coordinator" filter="url(#glow)"/>
+          <rect x="75" y="228" width="110" height="64" rx="8" class="node-ring" fill="none" stroke="var(--purple)" stroke-width="2"/>
+          <text x="130" y="252" class="node-label" font-weight="700" font-size="12">Coordinator</text>
+          <text x="130" y="266" class="node-sublabel">6 Layers</text>
+          <text x="130" y="280" class="node-sublabel">Orchestrator</text>
+        </g>
+
+        <!-- DataValidator -->
+        <g class="node-group" onclick="selectNode('validator')" id="node-validator">
+          <rect x="540" y="190" width="120" height="60" rx="8" class="n-validator"/>
+          <rect x="540" y="190" width="120" height="60" rx="8" class="node-ring" fill="none" stroke="var(--green)" stroke-width="2"/>
+          <text x="600" y="214" class="node-label" font-weight="700" font-size="11">DataValidator</text>
+          <text x="600" y="228" class="node-sublabel">data_validation</text>
+          <text x="600" y="241" class="node-sublabel">$0.01 · standard</text>
+        </g>
+
+        <!-- AnalyticsEngine -->
+        <g class="node-group" onclick="selectNode('analytics')" id="node-analytics">
+          <rect x="600" y="240" width="120" height="60" rx="8" class="n-analytics"/>
+          <rect x="600" y="240" width="120" height="60" rx="8" class="node-ring" fill="none" stroke="var(--orange)" stroke-width="2"/>
+          <text x="660" y="264" class="node-label" font-weight="700" font-size="11">AnalyticsEngine</text>
+          <text x="660" y="278" class="node-sublabel">analytics</text>
+          <text x="660" y="291" class="node-sublabel">$0.02 · standard</text>
+        </g>
+
+        <!-- ReportWriter -->
+        <g class="node-group" onclick="selectNode('reporter')" id="node-reporter">
+          <rect x="570" y="330" width="110" height="60" rx="8" class="n-reporter"/>
+          <rect x="570" y="330" width="110" height="60" rx="8" class="node-ring" fill="none" stroke="var(--teal)" stroke-width="2"/>
+          <text x="625" y="354" class="node-label" font-weight="700" font-size="11">ReportWriter</text>
+          <text x="625" y="368" class="node-sublabel">report_generation</text>
+          <text x="625" y="381" class="node-sublabel">$0.015 · premium</text>
+        </g>
+
+        <!-- ── MESSAGE LABELS (shown during animation) ── -->
+        <text id="lbl-announce" x="490" y="145" font-size="10" fill="var(--purple)" text-anchor="middle" opacity="0" font-family="monospace">AnnounceMessage</text>
+        <text id="lbl-health" x="370" y="220" font-size="10" fill="var(--teal)" text-anchor="middle" opacity="0" font-family="monospace">HealthPing / Pong</text>
+        <text id="lbl-negotiate" x="370" y="236" font-size="10" fill="var(--orange)" text-anchor="middle" opacity="0" font-family="monospace">NegotiateRequest → Offer → Ack</text>
+        <text id="lbl-execute" x="360" y="310" font-size="10" fill="var(--green)" text-anchor="middle" opacity="0" font-family="monospace">ExecuteStep → ExecuteResult</text>
+        <text id="lbl-chain" x="130" y="380" font-size="10" fill="var(--blue)" text-anchor="start" opacity="0" font-family="monospace">dataset → stats → report</text>
+
+        <!-- ── MOVING PACKET ── -->
+        <circle id="packet" cx="0" cy="0" r="6" fill="var(--orange)" opacity="0" filter="url(#glow)"/>
+
+        <!-- ── PHASE LABELS ── -->
+        <text id="phase-label" x="410" y="470" font-size="12" fill="var(--blue)" text-anchor="middle" opacity="0" font-weight="600"></text>
+      </svg>
+    </div>
+
+    <!-- ── TAB 2: PIPELINE ── -->
+    <div id="tab-pipeline" class="tab-content">
+      <div class="pipeline-container">
+
+        <div class="layers-row">
+          <div class="layer-card l1 selected" onclick="selectLayer(1)">
+            <div class="num">Layer 1</div>
+            <h3>Communication</h3>
+            <p>libp2p · KadDHT · GossipSub · Noise · Mplex</p>
+          </div>
+          <div class="layer-card l2" onclick="selectLayer(2)">
+            <div class="num">Layer 2</div>
+            <h3>Policy Extraction</h3>
+            <p>Natural language → PolicySet · LLM or rule-based</p>
+          </div>
+          <div class="layer-card l3" onclick="selectLayer(3)">
+            <div class="num">Layer 3</div>
+            <h3>Negotiation</h3>
+            <p>Policy-aware worker selection · HMAC tokens</p>
+          </div>
+          <div class="layer-card l4" onclick="selectLayer(4)">
+            <div class="num">Layer 4</div>
+            <h3>Protocol Gen</h3>
+            <p>DAG compilation · Topological sort · Wave order</p>
+          </div>
+          <div class="layer-card l5" onclick="selectLayer(5)">
+            <div class="num">Layer 5</div>
+            <h3>Execution</h3>
+            <p>Wave-parallel dispatch · Data chaining · Retry</p>
+          </div>
+          <div class="layer-card l6" onclick="selectLayer(6)">
+            <div class="num">Layer 6</div>
+            <h3>Attestation</h3>
+            <p>SHA-256 integrity · Local / RPC / Filecoin FVM</p>
+          </div>
+        </div>
+
+        <div class="flow-section">
+          <h2>Protocol Message Flow</h2>
+
+          <div class="flow-row">
+            <div class="flow-node" onclick="selectNode('coordinator')">
+              <div class="fn-name">Coordinator</div>
+              <div class="fn-cap">Orchestrator</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-msg data">AnnounceMessage (recv)</div>
+            <div class="flow-arrow">←</div>
+            <div class="flow-node" onclick="selectNode('validator')">
+              <div class="fn-name">Workers ×3</div>
+              <div class="fn-cap">GossipSub heartbeat 5s</div>
+            </div>
+            <div style="flex:1"></div>
+            <span style="font-size:11px;color:var(--muted)">Layer 1 — Discovery</span>
+          </div>
+
+          <div style="width:1px;background:var(--border);height:12px;margin-left:54px;margin-bottom:0"></div>
+
+          <div class="flow-row">
+            <div class="flow-node" onclick="selectNode('coordinator')">
+              <div class="fn-name">Coordinator</div>
+              <div class="fn-cap">per capability</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-msg negotiate">NegotiateRequest</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-msg negotiate">NegotiateOffer</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-msg negotiate">NegotiateAck + token</div>
+            <div style="flex:1"></div>
+            <span style="font-size:11px;color:var(--muted)">Layer 3</span>
+          </div>
+
+          <div style="width:1px;background:var(--border);height:12px;margin-left:54px"></div>
+
+          <div class="flow-row">
+            <div class="flow-node">
+              <div class="fn-name">ProtocolGen</div>
+              <div class="fn-cap">Kahn's toposort</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-msg data">ExecutionProtocol (DAG)</div>
+            <div class="flow-arrow"></div>
+            <div style="font-size:11px;color:var(--muted);font-family:monospace">wave=1 → wave=2 → wave=3</div>
+            <div style="flex:1"></div>
+            <span style="font-size:11px;color:var(--muted)">Layer 4</span>
+          </div>
+
+          <div style="width:1px;background:var(--border);height:12px;margin-left:54px"></div>
+
+          <div class="flow-row">
+            <div class="flow-node" onclick="selectNode('coordinator')">
+              <div class="fn-name">Coordinator</div>
+              <div class="fn-cap">per step</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-msg execute">ExecuteStep + input_data</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-msg execute">ExecuteResult + hash</div>
+            <div style="flex:1"></div>
+            <span style="font-size:11px;color:var(--muted)">Layer 5</span>
+          </div>
+
+          <div style="width:1px;background:var(--border);height:12px;margin-left:54px"></div>
+
+          <div class="flow-row">
+            <div class="flow-node">
+              <div class="fn-name">AttestBackend</div>
+              <div class="fn-cap">local / rpc / fevm</div>
+            </div>
+            <div class="flow-arrow">←</div>
+            <div class="flow-msg attest">SHA-256(output) verified</div>
+            <div style="flex:1"></div>
+            <span style="font-size:11px;color:var(--muted)">Layer 6</span>
+          </div>
+        </div>
+
+        <div class="wave-section">
+          <div class="wave-label">Execution Waves (topological order)</div>
+
+          <div class="wave-row">
+            <div class="wave-num">Wave 1</div>
+            <div class="wave-steps">
+              <div class="wave-step" onclick="selectNode('validator')">
+                <div class="ws-worker">DataValidator</div>
+                <div class="ws-cap">data_validation</div>
+                <div class="ws-chain">input: mock_dataset (20 rows)</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;padding:0 20px;gap:8px;margin:2px 0">
+            <div style="width:70px;text-align:center">↓</div>
+            <div style="font-size:11px;color:var(--blue);font-family:monospace">output_data → step_3_analytics.input_data</div>
+          </div>
+
+          <div class="wave-row">
+            <div class="wave-num">Wave 2</div>
+            <div class="wave-steps">
+              <div class="wave-step" onclick="selectNode('analytics')">
+                <div class="ws-worker">AnalyticsEngine</div>
+                <div class="ws-cap">analytics</div>
+                <div class="ws-chain">input: ← step_1_data_validation</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;padding:0 20px;gap:8px;margin:2px 0">
+            <div style="width:70px;text-align:center">↓</div>
+            <div style="font-size:11px;color:var(--blue);font-family:monospace">output_data → step_4_report_generation.input_data</div>
+          </div>
+
+          <div class="wave-row">
+            <div class="wave-num">Wave 3</div>
+            <div class="wave-steps">
+              <div class="wave-step" onclick="selectNode('reporter')">
+                <div class="ws-worker">ReportWriter</div>
+                <div class="ws-cap">report_generation</div>
+                <div class="ws-chain">input: ← step_3_analytics</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;display:flex;gap:20px;font-size:11px;color:var(--muted)">
+            <span>Total wall time: <span style="color:var(--green)">~1s</span></span>
+            <span>Steps: <span style="color:var(--green)">3/3 succeeded</span></span>
+            <span>Integrity: <span style="color:var(--green)">all SHA-256 checks passed</span></span>
+            <span>Attestation: <span style="color:var(--blue)">LocalHashBackend</span></span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ── SIDEBAR ── -->
+  <div class="sidebar" id="sidebar">
+    <h2>Details</h2>
+    <div id="sidebar-content">
+      <div class="detail-card">
+        <h3><div class="dot" style="background:var(--blue)"></div>Select a node</h3>
+        <p>Click any node in the topology or pipeline view to see details about that agent, layer, or message type.</p>
+      </div>
+
+      <div class="detail-card">
+        <h3>Quick Reference</h3>
+        <div class="kv"><span>Bootstrap port</span><span>9000</span></div>
+        <div class="kv"><span>DataValidator</span><span>9001</span></div>
+        <div class="kv"><span>AnalyticsEngine</span><span>9002</span></div>
+        <div class="kv"><span>ReportWriter</span><span>9003</span></div>
+        <div class="kv"><span>Coordinator</span><span>9004</span></div>
+      </div>
+
+      <div class="detail-card">
+        <h3>Protocol IDs</h3>
+        <div style="margin-top:6px">
+          <span class="proto-badge">/agentmesh/negotiate/v1</span>
+          <span class="proto-badge">/agentmesh/execute/v1</span>
+          <span class="proto-badge">/agentmesh/health/v1</span>
+          <span class="proto-badge">agentmesh-announce</span>
+          <span class="proto-badge">agentmesh-worker-v1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /layout -->
+
+<script>
+// ── Node data ──
+const NODE_DATA = {
+  bootstrap: {
+    name: 'Bootstrap Node',
+    color: 'var(--layer1)',
+    port: 9000,
+    desc: 'Well-known entry point for the network. Runs KadDHT in SERVER mode and maintains the GossipSub mesh for relaying announcements. Not a worker — purely infrastructure.',
+    attrs: [
+      ['Role', 'DHT Server + GossipSub Relay'],
+      ['Port', '9000'],
+      ['DHT Mode', 'SERVER'],
+      ['Protocols', 'KadDHT + GossipSub'],
+      ['Subscribes to', 'agentmesh-announce'],
+    ]
+  },
+  coordinator: {
+    name: 'Coordinator',
+    color: 'var(--purple)',
+    port: 9004,
+    desc: 'Orchestrates all 6 layers. Discovers workers via GossipSub, negotiates assignments, compiles the execution DAG, dispatches steps, and attests results.',
+    attrs: [
+      ['Port', '9004'],
+      ['Layers', '1 + 2 + 3 + 4 + 5 + 6'],
+      ['Discovery', '8s GossipSub window'],
+      ['Task', '"Validate, analyze, and report"'],
+      ['Budget', '$0.10'],
+    ]
+  },
+  validator: {
+    name: 'DataValidator',
+    color: 'var(--green)',
+    port: 9001,
+    desc: 'Verifies schema, counts nulls, and checks required fields in the dataset. Passes the cleaned dataset downstream. Announces via GossipSub every 5s.',
+    attrs: [
+      ['Capability', 'data_validation'],
+      ['Port', '9001'],
+      ['Cost/unit', '$0.01'],
+      ['Quality', 'standard'],
+      ['Latency', '500ms'],
+      ['Step ID', 'step_1_data_validation'],
+    ]
+  },
+  analytics: {
+    name: 'AnalyticsEngine',
+    color: 'var(--orange)',
+    port: 9002,
+    desc: 'Computes statistical metrics (count, mean, std, min, max) on the validated dataset received from DataValidator. Passes stats to ReportWriter.',
+    attrs: [
+      ['Capability', 'analytics'],
+      ['Port', '9002'],
+      ['Cost/unit', '$0.02'],
+      ['Quality', 'standard'],
+      ['Metrics', 'count, mean, std, min, max'],
+      ['Step ID', 'step_3_analytics'],
+    ]
+  },
+  reporter: {
+    name: 'ReportWriter',
+    color: 'var(--teal)',
+    port: 9003,
+    desc: 'Formats a human-readable Markdown report from the analytics statistics. Final step in the pipeline. Outputs the complete report to the coordinator.',
+    attrs: [
+      ['Capability', 'report_generation'],
+      ['Port', '9003'],
+      ['Cost/unit', '$0.015'],
+      ['Quality', 'premium'],
+      ['Format', 'Markdown'],
+      ['Step ID', 'step_4_report_generation'],
+    ]
+  }
+};
+
+const LAYER_DATA = {
+  1: {
+    name: 'Layer 1 — Communication',
+    color: 'var(--layer1)',
+    desc: 'libp2p networking stack. Provides peer discovery (KadDHT), pub/sub messaging (GossipSub), transport encryption (Noise), and stream multiplexing (Mplex).',
+    attrs: [
+      ['Transport', 'TCP + Noise encryption'],
+      ['Muxer', 'Mplex'],
+      ['Discovery', 'KadDHT (SERVER mode)'],
+      ['Pub/Sub', 'GossipSub /meshsub/1.0.0'],
+      ['Announce topic', 'agentmesh-announce'],
+      ['DHT key', 'agentmesh-worker-v1'],
+    ]
+  },
+  2: {
+    name: 'Layer 2 — Policy Extraction',
+    color: 'var(--layer2)',
+    desc: 'Converts the natural-language task into a structured PolicySet with required capabilities and negotiable/fixed constraints.',
+    attrs: [
+      ['Input', '"Validate, analyze, report on dataset"'],
+      ['Output caps', 'data_validation, analytics, report_generation'],
+      ['max_budget_usd', '0.10 (negotiable)'],
+      ['max_latency_ms', '5000 (negotiable)'],
+      ['output_format', 'json (fixed)'],
+      ['LLM backend', 'Claude Haiku (if API key set)'],
+    ]
+  },
+  3: {
+    name: 'Layer 3 — Negotiation Engine',
+    color: 'var(--layer3)',
+    desc: 'Policy-aware multi-agent coordination. Workers respond to NegotiateRequests with offers; the engine scores them and selects the best assignment per capability.',
+    attrs: [
+      ['Protocol', '/agentmesh/negotiate/v1'],
+      ['Stream', 'One per capability (reused for full exchange)'],
+      ['Token', 'HMAC-SHA256(secret, task_id:step_id)[:32]'],
+      ['Scoring', 'Base 100 · cheaper +30 · faster +20 · counter -10'],
+      ['Non-negotiable violation', 'Immediate reject'],
+      ['Counter tolerance', '±20%'],
+    ]
+  },
+  4: {
+    name: 'Layer 4 — Protocol Generator',
+    color: 'var(--layer4)',
+    desc: "Compiles negotiated assignments into an ExecutionProtocol using Kahn's topological sort. Groups steps into parallel waves based on data-dependency graph.",
+    attrs: [
+      ['Algorithm', "Kahn's topological sort"],
+      ['Dep graph', 'DATA_VALIDATION → ANALYTICS → REPORT_GEN'],
+      ['Wave 1', 'DATA_VALIDATION (entry point)'],
+      ['Wave 2', 'ANALYTICS (depends on wave 1)'],
+      ['Wave 3', 'REPORT_GENERATION (depends on wave 2)'],
+      ['Hash', 'SHA-256 content fingerprint'],
+    ]
+  },
+  5: {
+    name: 'Layer 5 — Execution Engine',
+    color: 'var(--layer5)',
+    desc: 'Dispatches steps wave-by-wave using trio nursery for parallelism within a wave. Chains output_data from predecessor steps as input_data to successors.',
+    attrs: [
+      ['Protocol', '/agentmesh/execute/v1'],
+      ['Concurrency', 'trio nursery (wave-parallel)'],
+      ['Timeout', '30s per step'],
+      ['Retry', '2 attempts · exp backoff'],
+      ['Data chaining', 'output_data → next step input_data'],
+      ['Token verify', 'HMAC re-verified before execution'],
+    ]
+  },
+  6: {
+    name: 'Layer 6 — Hybrid Infrastructure',
+    color: 'var(--layer6)',
+    desc: 'Pluggable attestation backends for recording execution integrity proofs. SHA-256 hash of output is recomputed locally and compared before attestation.',
+    attrs: [
+      ['Default', 'LocalHashBackend (in-memory)'],
+      ['RPC backend', 'Set ATTESTATION_RPC_URL'],
+      ['On-chain', 'Set FEVM_RPC_URL + FEVM_CONTRACT + FEVM_PRIVATE_KEY'],
+      ['Hash algo', 'SHA-256[:16] hex'],
+      ['Timing-safe', 'hmac.compare_digest()'],
+      ['Fallback', 'RPC errors → local storage'],
+    ]
+  }
+};
+
+// ── Sidebar ──
+function renderSidebar(data) {
+  const sb = document.getElementById('sidebar-content');
+  sb.innerHTML = `
+    <div class="detail-card">
+      <h3><div class="dot" style="background:${data.color}"></div>${data.name}</h3>
+      <p style="margin-bottom:10px">${data.desc}</p>
+      ${data.attrs.map(([k,v]) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`).join('')}
+    </div>
+  `;
+}
+
+function selectNode(id) {
+  if (NODE_DATA[id]) renderSidebar(NODE_DATA[id]);
+}
+
+function selectLayer(n) {
+  document.querySelectorAll('.layer-card').forEach((el,i) => {
+    el.classList.toggle('selected', i+1 === n);
+  });
+  if (LAYER_DATA[n]) renderSidebar(LAYER_DATA[n]);
+}
+
+// ── Tabs ──
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['topology','pipeline'][i] === name);
+  });
+  document.getElementById('tab-topology').classList.toggle('active', name === 'topology');
+  document.getElementById('tab-pipeline').classList.toggle('active', name === 'pipeline');
+}
+
+// ── Topology Animation ──
+let animRunning = false;
+let animTimeout = null;
+let showLabels = true;
+
+function setStatus(msg, cls='') {
+  const el = document.getElementById('status-bar');
+  el.innerHTML = cls ? `<span class="${cls}">${msg}</span>` : msg;
+}
+
+function setEdgeOpacity(ids, opacity) {
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.setAttribute('opacity', opacity);
+  });
+}
+
+function showLabel(id, show) {
+  const el = document.getElementById(id);
+  if (el) el.setAttribute('opacity', show ? 1 : 0);
+}
+
+function highlightNode(id, on) {
+  const ring = document.querySelector(`#node-${id} .node-ring`);
+  if (ring) ring.setAttribute('opacity', on ? 1 : 0);
+}
+
+function sleep(ms) {
+  return new Promise(r => { animTimeout = setTimeout(r, ms); });
+}
+
+async function playAnimation() {
+  if (animRunning) return;
+  resetAnimation();
+  animRunning = true;
+
+  const phases = [
+    async () => {
+      setStatus('Phase 1 — Worker startup: connecting to bootstrap via DHT');
+      showLabel('phase-label', true);
+      document.getElementById('phase-label').textContent = 'Phase 1: DHT Discovery';
+      ['bootstrap','validator','analytics','reporter'].forEach(n => highlightNode(n, true));
+      setEdgeOpacity(['e-boot-val','e-boot-ana','e-boot-rep'], 0.9);
+      await sleep(1400);
+    },
+    async () => {
+      setStatus('Phase 2 — Workers publishing capability announcements via GossipSub');
+      document.getElementById('phase-label').textContent = 'Phase 2: GossipSub Announce';
+      setEdgeOpacity(['gs-val-boot','gs-ana-boot','gs-rep-boot'], 0.9);
+      showLabel('lbl-announce', true);
+      await sleep(1400);
+    },
+    async () => {
+      setStatus('Phase 3 — Bootstrap relaying announcements to Coordinator');
+      setEdgeOpacity(['e-boot-coord','gs-boot-coord'], 0.9);
+      highlightNode('coordinator', true);
+      await sleep(1200);
+    },
+    async () => {
+      setStatus('Phase 4 — Coordinator sending health pings to discovered workers');
+      document.getElementById('phase-label').textContent = 'Phase 4: Health Check';
+      showLabel('lbl-health', true);
+      setEdgeOpacity(['h-coord-val','h-coord-ana','h-coord-rep'], 0.8);
+      await sleep(1400);
+    },
+    async () => {
+      setStatus('Phase 5 — Negotiation: NegotiateRequest → Offer → Ack + HMAC token');
+      document.getElementById('phase-label').textContent = 'Phase 5: Negotiation';
+      showLabel('lbl-health', false);
+      showLabel('lbl-negotiate', true);
+      setEdgeOpacity(['h-coord-val','h-coord-ana','h-coord-rep'], 0);
+      setEdgeOpacity(['n-coord-val','n-coord-ana','n-coord-rep'], 0.9);
+      await sleep(1800);
+    },
+    async () => {
+      setStatus('Phase 6 — Protocol compiled: 3 steps, 3 waves (wave=1 DataValidator)');
+      document.getElementById('phase-label').textContent = 'Phase 6: Protocol Gen → Execute Wave 1';
+      showLabel('lbl-negotiate', false);
+      setEdgeOpacity(['n-coord-val','n-coord-ana','n-coord-rep'], 0);
+      setEdgeOpacity(['x-coord-val'], 0.9);
+      await sleep(800);
+    },
+    async () => {
+      setStatus('ExecuteStep → DataValidator → ExecuteResult (hash verified) ✓');
+      setEdgeOpacity(['x-val-coord'], 0.9);
+      showLabel('lbl-execute', true);
+      await sleep(1200);
+    },
+    async () => {
+      setStatus('Wave 2: input_data chained → AnalyticsEngine');
+      document.getElementById('phase-label').textContent = 'Wave 2: Analytics';
+      setEdgeOpacity(['x-coord-val','x-val-coord'], 0.3);
+      setEdgeOpacity(['x-coord-ana'], 0.9);
+      await sleep(800);
+    },
+    async () => {
+      setStatus('ExecuteStep → AnalyticsEngine → ExecuteResult (hash verified) ✓');
+      setEdgeOpacity(['x-ana-coord'], 0.9);
+      await sleep(1200);
+    },
+    async () => {
+      setStatus('Wave 3: input_data chained → ReportWriter');
+      document.getElementById('phase-label').textContent = 'Wave 3: Report';
+      setEdgeOpacity(['x-coord-ana','x-ana-coord'], 0.3);
+      setEdgeOpacity(['x-coord-rep'], 0.9);
+      await sleep(800);
+    },
+    async () => {
+      setStatus('ExecuteStep → ReportWriter → ExecuteResult (hash verified) ✓');
+      setEdgeOpacity(['x-rep-coord'], 0.9);
+      showLabel('lbl-chain', true);
+      await sleep(1200);
+    },
+    async () => {
+      document.getElementById('phase-label').textContent = '✓ Pipeline Complete';
+      setStatus('Pipeline complete — 3/3 steps succeeded · all integrity checks passed · attested to LocalHashBackend', 'ok');
+      await sleep(3000);
+    }
+  ];
+
+  for (const phase of phases) {
+    if (!animRunning) break;
+    await phase();
+  }
+  animRunning = false;
+}
+
+function resetAnimation() {
+  animRunning = false;
+  if (animTimeout) clearTimeout(animTimeout);
+
+  const edgeIds = ['e-boot-coord','e-boot-val','e-boot-ana','e-boot-rep',
+    'gs-val-boot','gs-ana-boot','gs-rep-boot','gs-boot-coord',
+    'h-coord-val','h-coord-ana','h-coord-rep',
+    'n-coord-val','n-coord-ana','n-coord-rep',
+    'x-coord-val','x-val-coord','x-coord-ana','x-ana-coord',
+    'x-coord-rep','x-rep-coord'];
+  setEdgeOpacity(edgeIds, 0.15);
+  setEdgeOpacity(['e-boot-coord','e-boot-val','e-boot-ana','e-boot-rep'], 0.4);
+
+  ['bootstrap','coordinator','validator','analytics','reporter'].forEach(n => highlightNode(n, false));
+  ['lbl-announce','lbl-health','lbl-negotiate','lbl-execute','lbl-chain','phase-label'].forEach(id => showLabel(id, false));
+  setStatus('Click "Play" to animate the full protocol flow.');
+}
+
+function toggleLabels() {
+  showLabels = !showLabels;
+  document.querySelectorAll('.node-label, .node-sublabel').forEach(el => {
+    el.style.opacity = showLabels ? 1 : 0;
+  });
+}
+
+// Init: set starting edge opacity
+resetAnimation();
+
+// Default sidebar for layer 1
+selectLayer(1);
+</script>
+</body>
+</html>
