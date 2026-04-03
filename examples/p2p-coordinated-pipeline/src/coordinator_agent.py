@@ -289,6 +289,10 @@ async def run(
                 log.info(f"[Coordinator] Listening on GossipSub '{ANNOUNCE_TOPIC}'")
 
                 # ── Layer 2: Extract policies from natural-language task ──────
+                _banner("AgentMesh Full-Stack Demo", "═")
+                print(f"  Task : {task}")
+                print()
+                _banner("Layer 2 — Policy Extraction", "─")
                 extractor = PolicyExtractor()
                 policy = extractor.extract(task, budget=budget)
 
@@ -296,11 +300,9 @@ async def run(
                 tlog = make_trace_logger(log, policy.task_id)
                 metrics = PipelineMetrics(task_id=policy.task_id)
 
-                _banner("AgentMesh Full-Stack Demo", "═")
-                print(f"  Task : {task}")
-                print(f"  ID   : {policy.task_id}")
-                print(f"  Caps : {[c.value for c in policy.required_capabilities]}")
-                print(f"  Policies:")
+                print(f"  Task ID  : {policy.task_id}")
+                print(f"  Caps     : {[c.value for c in policy.required_capabilities]}")
+                print(f"  Policies :")
                 for p in policy.policies:
                     tag = "negotiable" if p.negotiable else "fixed"
                     print(f"    {p.key} = {p.value}  ({tag})")
@@ -548,11 +550,12 @@ async def run(
                 # Drain any streams not explicitly closed above (cancellation path)
                 await _drain_streams()
 
-                # ── Layer 5 + 6: Execute the protocol ────────────────────────
-                _banner("Layer 5 — Execution Engine  (Layer 6: Hybrid Verification)", "─")
+                # ── Layer 5: Execute the protocol ────────────────────────────
+                _banner("Layer 5 — Execution Engine", "─")
+                attestation_backend = build_attestation_backend()
                 exec_engine = ExecutionEngine(
                     host,
-                    attestation=build_attestation_backend(),
+                    attestation=attestation_backend,
                     execute_timeout=cfg.execute_timeout,
                     retry_attempts=cfg.execute_retry_attempts,
                 )
@@ -563,6 +566,14 @@ async def run(
                     protocol, on_step=_on_step_complete, metrics=metrics
                 )
                 metrics.execution_duration_s = trio.current_time() - _execution_t0
+
+                # ── Layer 6: Hybrid infrastructure — integrity + attestation ──
+                _banner("Layer 6 — Hybrid Infrastructure (Attestation)", "─")
+                backend_name = type(attestation_backend).__name__
+                print(f"  Backend  : {backend_name}")
+                for step_id, result in results.items():
+                    print(f"  ✓ {step_id}  hash={result.verification_hash}  attested")
+                print()
 
                 # Persist results to disk before printing summary
                 saved_path = save_pipeline_result(protocol, results, metrics)

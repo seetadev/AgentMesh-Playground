@@ -119,7 +119,7 @@ class ExecutionEngine:
                     metrics.steps_dispatched += 1
                 try:
                     result = await self._dispatch(
-                        protocol.protocol_id, step, input_data, metrics
+                        protocol.protocol_id, protocol.task_id, step, input_data, metrics
                     )
                 except Exception:
                     if metrics:
@@ -152,6 +152,7 @@ class ExecutionEngine:
     async def _dispatch(
         self,
         protocol_id: str,
+        task_id: str,
         step: ProtocolStep,
         input_data: Optional[dict],
         metrics: Optional[PipelineMetrics] = None,
@@ -166,7 +167,7 @@ class ExecutionEngine:
             sender=self._peer_id,
             protocol_id=protocol_id,
             step_id=step.step_id,
-            task_id=protocol_id,
+            task_id=task_id,
             capability=step.capability,
             session_token=step.session_token,
             parameters=step.parameters,
