@@ -205,7 +205,7 @@ AgentMesh introduces:
 
 ## 🧑‍💻 Built By
 
-Leadership team and Core contributors from the **libp2p ecosystem**, including maintainers of **js-libp2p**, bringing production-grade p2p expertise into agent systems.
+Leadership team and Core contributors from the **libp2p ecosystem**, including maintainers of **js/py-libp2p**, bringing production-grade p2p expertise into agent systems.
 
 ---
 
