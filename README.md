@@ -2,7 +2,7 @@
 
 **AgentMesh Stack Examples for Secure Multi-Agent Systems**
 
-> A collection of practical examples built on the **AgentMesh Stack** — a **libp2p-based peer-to-peer coordination framework** for secure, decentralized multi-agent systems.
+> A collection of practical 8 practical examples built on the **AgentMesh Stack** — a **libp2p and IPFS-based peer-to-peer coordination framework** for secure, decentralized multi-agent systems.
 
 ---
 
@@ -10,7 +10,9 @@
 
 AgentMesh Playground is a growing repository of **example implementations, experiments, and demos** built using the **AgentMesh Stack**.
 
-This repo enables contributors to:
+The project aligns closely with ongoing explorations around **libp2p, IPFS, AI/ML systems, and decentralized coordination**, including discussions and demos showcased in libp2p and IPFS community events.
+
+This repository enables contributors to:
 
 * Build and test **multi-agent coordination scenarios**
 * Experiment with **p2p communication using libp2p**
@@ -34,7 +36,7 @@ It replaces centralized orchestration with a **p2p-first architecture**, allowin
 
 ## 🏗️ Architecture
 
-```
+```text
 ┌────────────────────────────────────────────┐
 │           AgentMesh Stack                 │
 ├────────────────────────────────────────────┤
@@ -105,6 +107,8 @@ This playground includes (and encourages):
 * ⚔️ **Adversarial Multi-Agent Simulations**
 * ⛓️ **On-chain + Off-chain Execution Flows**
 * 🌐 **p2p Networking Experiments**
+* 🤖 **AI/ML Coordination Demos using libp2p + IPFS**
+* 🐍 **Python-based decentralized agent experiments**
 
 ---
 
@@ -142,6 +146,8 @@ We actively welcome contributors to build new examples on top of AgentMesh.
 * libp2p-based communication modules
 * Filecoin/IPFS integrations
 * Adversarial testing scenarios
+* AI/ML coordination experiments
+* Python-based p2p tooling demos
 
 ### Steps:
 
@@ -189,6 +195,7 @@ AgentMesh introduces:
 * **Decentralized coordination via libp2p**
 * **Trust-minimized execution via Filecoin**
 * **Composable, modular agent tooling**
+* **Distributed AI/ML coordination using IPFS + p2p networking**
 
 ---
 
@@ -198,6 +205,7 @@ AgentMesh introduces:
 * 🔄 Multi-agent negotiation demos
 * ⛓️ Filecoin + IPFS integration
 * 🧠 LLM-powered protocol generation
+* 🤖 AI/ML agent orchestration experiments
 * 🌐 Production-grade decentralized agent network
 * 🏟️ ARIA Arena validation
 
@@ -221,4 +229,4 @@ AgentMesh is building the foundation for:
 
 > **Trustless, decentralized, and intelligent multi-agent coordination.**
 
-If you're interested in **AI + p2p + crypto systems**, this is the playground to build the future.
+If you're interested in **AI + p2p + crypto systems**, decentralized AI infrastructure, or secure multi-agent coordination, this is the playground to build the future.
