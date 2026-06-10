@@ -1,0 +1,6 @@
+py-libp2p>=1.2.0
+anyio>=4.0.0
+pydantic>=2.0.0
+tomli>=2.0.0 ; python_version < "3.11"
+rich>=13.0.0
+pytest>=8.0.0
