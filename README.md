@@ -2,7 +2,7 @@
 
 **AgentMesh Stack Examples for Secure Multi-Agent Systems**
 
-> A collection of practical 8 practical examples built on the **AgentMesh Stack** — a **libp2p and IPFS-based peer-to-peer coordination framework** for secure, decentralized multi-agent systems.
+> A collection of 7 example implementations built on the **AgentMesh Stack** — a **libp2p and IPFS-based peer-to-peer coordination framework** for secure, decentralized multi-agent systems.
 
 ---
 
